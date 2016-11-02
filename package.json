@@ -1,6 +1,6 @@
 {
   "name": "jssqlparser",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "sql + AST tree.",
   "keywords": [
   ],
@@ -16,7 +16,7 @@
   "maintainers": [
   ],
   "homepage": "",
-  "main": "lib/jssqlparser.js",
+  "main": "libs/jssqlparser.js",
   "repository": {
     "type": "git",
     "url": "http://github.com/cudbg/jssqlparser.git"
