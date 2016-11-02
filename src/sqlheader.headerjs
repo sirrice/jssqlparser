@@ -1,0 +1,23 @@
+var ast, _;
+
+_ = _ = require('underscore');
+
+ast = ast = require('./ast.js');
+
+put_if_not_null = function(o, key, val) {
+  if (!_.isEmpty(val)) {
+    o[key] = val;
+  }
+  return o;
+};
+
+flatstr = function(x, rejectSpace, joinChar) {
+  if (rejectSpace == null) {
+    rejectSpace = false;
+  }
+  if (joinChar == null) {
+    joinChar = '';
+  }
+  return _.reject(_.flatten(x), _.isEmpty).join(joinChar);
+};
+
