@@ -16,6 +16,7 @@
   "maintainers": [
   ],
   "homepage": "",
+  "main": "lib/jssqlparser.js",
   "repository": {
     "type": "git",
     "url": "http://github.com/cudbg/jssqlparser.git"

@@ -1,4 +1,4 @@
-parser = require './sqlast.js'
+parser = require './jssqlparser.js'
 ast = require "./ast.js"
 _ = require "underscore"
 fs = require "fs"
