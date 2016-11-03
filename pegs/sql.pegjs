@@ -200,6 +200,8 @@ value =
            { return new ast.ColExpr(t[2], t[0]); } )
        / ( c: column_name
            { return new ast.ColExpr(c); } )
+       / ( r: param 
+           { return r; } )
        / ( u: ( unary_operator expr )
            { return new ast.UnaryExpr(u[0], u[1]); } )
        / ( p: ( lparen expr whitespace rparen )
@@ -248,7 +250,11 @@ expr =
 
 
 
-
+param = 
+  r: (':' name ':')
+  {
+    return new ast.ParamExpr(r[1])
+  }
 
 
 e_where = 
@@ -268,6 +274,8 @@ e_value =
            { return new ast.ColExpr(t[2], t[0]); } )
        / ( v: (column_name)
            { return new ast.ColExpr(v, null); })
+       / ( r: param 
+           { return r; })
 //       / ( unary_operator e_expr )
        / ( y: ( lparen e_where whitespace rparen )
            { return y[1]; } ) ) )

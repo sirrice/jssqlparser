@@ -7,6 +7,7 @@ ss = [
   "
     SELECT x FROM a;
     SELECT x FROM b, c WHERE b.x = 1;
+    SELECT :param: FROM b, c WHERE :p2: = 2;
   "
 ]
 

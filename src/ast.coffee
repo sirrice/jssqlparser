@@ -24,11 +24,7 @@ class Node
   nodeType: -> @constructor.name
 
   descendents: (types...) ->
-    ret = []
-    f = (node, path) ->
-      ret.push node if node.isType types...
-    @traverse f
-    ret
+    @allNodes (n) -> n.isType types...
 
   children: -> []
 
@@ -638,7 +634,12 @@ class TableExpr extends Expr
   toSQL: -> @table.toSQL()
   toJSString: -> @tableName
 
-
+class ParamExpr extends Expr
+  constructor: (@name) ->
+    super
+  children: -> []
+  clone: -> new ParamExpr @name
+  toSQL: -> ":#{@name}:" 
 class ValExpr extends Expr
   constructor: (@v) ->
     super
@@ -836,6 +837,7 @@ module.exports =
   FuncExpr          : FuncExpr
   ColExpr           : ColExpr
   TableExpr         : TableExpr
+  ParamExpr         : ParamExpr
   ValExpr           : ValExpr
   Group             : Group
   Having            : Having

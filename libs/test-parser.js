@@ -10,7 +10,7 @@
 
   fs = require("fs");
 
-  ss = ["SELECT x FROM a; SELECT x FROM b, c WHERE b.x = 1;"];
+  ss = ["SELECT x FROM a; SELECT x FROM b, c WHERE b.x = 1; SELECT :param: FROM b, c WHERE :p2: = 2;"];
 
   for (i = 0, len = ss.length; i < len; i++) {
     s = ss[i];
