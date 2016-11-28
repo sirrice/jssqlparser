@@ -48,7 +48,10 @@ class Node
     for child in @children()
       continue unless child?
       unless _.isFunction child.traverse
+        console.log "ERR: child node doesn't support traverse().  Printing child, this and path"
         console.log child
+        console.log @
+        console.log path
       child.traverse f, newpath
 
   # what is run by a dbms
@@ -136,7 +139,7 @@ class SelectCore extends Node
 
 
 class Query extends Node
-  constructor: (@type, @selectCores=[], @orderby=null, @limit=null) ->
+  constructor: (@selectCores=[], @orderby=null, @limit=null) ->
     @selectCores = _.compact _.flatten [@selectCores]
     super
 
@@ -147,7 +150,7 @@ class Query extends Node
     cores = @selectCores.map (sc) -> sc.clone()
     orderby = @orderby.clone() if @orderby?
     limit = @limit.clone() if @limit?
-    new Query @type, cores, orderby, limit
+    new Query cores, orderby, limit
 
   children: -> _.union @selectCores, _.compact([@orderby, @limit])
 
@@ -449,10 +452,11 @@ class Where extends Node
   children: -> @exprs
 
   toSQL: ->
-    if @exprs.length == 0
+    strs = _.compact _.map @exprs, (expr) -> expr.toSQL()
+
+    if strs.length == 0
       "1 = 1"
     else
-      strs = _.compact _.map @exprs, (expr) -> expr.toSQL()
       strs.join " AND "
 
   toJSString: ->
@@ -485,7 +489,10 @@ class Expr extends Node
 
   toSQL: ->
     if @op?
-      "(#{@l.toSQL()} #{@op} (#{@r.toSQL()}))"
+      if @r? and @r.isType("ColExpr", "ValExpr", "FuncExpr")
+        "(#{@l.toSQL()} #{@op} #{@r.toSQL()})"
+      else
+        "(#{@l.toSQL()} #{@op} (#{@r.toSQL()}))"
     else
       @l.toSQL()
 
@@ -525,7 +532,16 @@ class SpecialExpr extends Expr
 class BetweenExpr extends Expr
   constructor: (@v, @op, @minv, @maxv) ->
     super
-  clone: -> new BetweenExpr @v, @op, @minv, @maxv
+
+  clone: -> 
+    v = @v
+    v = @v.clone() if @v.clone?
+    minv = @minv
+    minv = @minv.clone() if @minv.clone?
+    maxv = @maxv
+    maxv = @maxv.clone() if @maxv.clone?
+    new BetweenExpr v, @op, minv, maxv
+
   children: -> _.compact [@v, @minv, @maxv]
 
   toSQL: ->
@@ -555,30 +571,6 @@ class UnaryExpr extends Expr
       "!_.isEmpty(#{@expr.toJSString()})"
     else
       "#{@op}#{@expr.toJSString()}"
-
-# Existential and Universal Quantifiers for Event queries
-class QuantExpr extends Expr
-  # FOR ALL @name IN @set (@suchthat)
-  # @set alias of Table/Source in event sequence
-  # @suchthat an Expr
-  constructor: (@type, @name, @set, @suchthat) ->
-    super
-  clone: -> new QuantExpr @type, @name, @set, @suchthat.clone()
-  children: -> [@set, @suchthat]
-
-  toSQL: ->
-    type = "FORALL"
-    type = "EXISTS" if @type is "exists"
-    "#{type} #{@name} IN #{@set.toSQL()} (#{@suchthat.toSQL()})"
-
-
-  toJSString: ->
-    func = switch @type
-      when "all" then "all"
-      when "exists" then "any"
-    "_.#{func}(#{@set.toJSString()}, function(#{@name}) {
-      return #{@suchthat.toJSString()};
-    });"
 
 class FuncExpr extends Expr
   constructor: (@fname, @exprs) ->
@@ -634,12 +626,43 @@ class TableExpr extends Expr
   toSQL: -> @table.toSQL()
   toJSString: -> @tableName
 
+class ParamVar extends Node
+  constructor: (@name, @val=null) ->
+
+  children: -> _.compact [@val]
+  clone: -> new ParamVar @name
+  toSQL: -> 
+    return @val.toSQL() if @val?
+    "$#{@name}"
+
 class ParamExpr extends Expr
-  constructor: (@name) ->
+  constructor: (@expr, @default=null, @params={}) ->
     super
-  children: -> []
-  clone: -> new ParamExpr @name
-  toSQL: -> ":#{@name}:" 
+
+  getVars: -> @expr.descendents "ParamVar"
+  areParamsFixed: -> _.all(@getVars(), (v) -> v.val?)
+  getParams: -> @getVars()
+  getParamNames: -> _.pluck @getVars(), "name"
+  setParams: (@params) ->
+    for pv in @getVars()
+      if pv.name of @params
+        pv.val = @params[pv.name]
+
+  children: -> _.compact [@default, @expr]
+
+  clone: -> 
+    args = _.map [@expr, @default], (v) -> v? and v.clone() or null
+    args.push _.clone(@params)
+    new ParamExpr args...
+
+  toSQL: -> 
+    return @expr.toSQL() if @areParamsFixed()
+    if @default?
+      if @default.isType("SpecialExpr") and @default.v is null
+        return null
+      return @default.toSQL() 
+    return null
+
 class ValExpr extends Expr
   constructor: (@v) ->
     super
@@ -648,6 +671,7 @@ class ValExpr extends Expr
   clone: -> new ValExpr @v
   toSQL: ->
     return "'#{@v}'" if _.isString @v
+    return @v.toFixed(2) if @v? and _.isNumber @v
     "#{@v}"
   toJSString: -> @toSQL()
 
@@ -680,8 +704,8 @@ class Group extends Node
   children: -> _.union @groupinglist, _.compact([@having])
 
   toSQL: ->
-    grouping = @groupinglist.map (g) -> g.toSQL()
-    if @having?
+    grouping = _.compact(@groupinglist.map (g) -> g.toSQL())
+    if @having? and @having.children().length > 0
       "#{grouping.join ", "} HAVING #{@having.toSQL()}"
     else
       grouping.join ", "
@@ -833,10 +857,10 @@ module.exports =
   SpecialExpr       : SpecialExpr
   BetweenExpr       : BetweenExpr
   UnaryExpr         : UnaryExpr
-  QuantExpr         : QuantExpr
   FuncExpr          : FuncExpr
   ColExpr           : ColExpr
   TableExpr         : TableExpr
+  ParamVar          : ParamVar
   ParamExpr         : ParamExpr
   ValExpr           : ValExpr
   Group             : Group

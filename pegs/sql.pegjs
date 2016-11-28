@@ -10,7 +10,7 @@ stmt_list =
 
 
 general_stmt = 
-  ( g: ( select_stmt / func_stmt))
+  ( g: ( select_stmt / func_stmt / param_expr / expr_and))
   { return g; }
 
 func_stmt = 
@@ -51,7 +51,7 @@ select_stmt =
         } )
   )
   { 
-    return new ast.Query("select", s,o,l);
+    return new ast.Query(s,o,l);
   }
 
 
@@ -74,6 +74,7 @@ select_core =
                         .flatten()
                         .without(",", " ", ",", null)
                         .reject(_.isEmpty)
+                        .value()
                     }
                 )
                 ( HAVING expr )? )? 
@@ -195,13 +196,20 @@ value =
   v: ( whitespace
        ( call_function
        / ( x: literal_value
-           { return new ast.ValExpr(x); } )
+           { 
+              if (x == "NULL" || x == "null") {
+                return new ast.SpecialExpr(null);
+              }
+              return new ast.ValExpr(x); 
+            } )
        / ( t: ( table_name dot column_name )
            { return new ast.ColExpr(t[2], t[0]); } )
        / ( c: column_name
            { return new ast.ColExpr(c); } )
-       / ( r: param 
+       / ( r: param_expr
            { return r; } )
+       / ( pv: param_var
+           { return pv })
        / ( u: ( unary_operator expr )
            { return new ast.UnaryExpr(u[0], u[1]); } )
        / ( p: ( lparen expr whitespace rparen )
@@ -215,6 +223,18 @@ value =
              return new ast.UnaryExpr("EXISTS", e[2]);
            } ) ) )
   { return v[1] }
+
+expr_and = 
+  e: (expr (whitespace1 'AND' expr)* )
+  {
+    var expr = e[0];
+    var expr_rest = e[1];
+    var memo_f = function(memo, e) { return new ast.Expr(memo, 'AND', e); }
+
+    expr_rest = _.compact(_.without(_.flatten(expr_rest), "AND", " ", "\t"));
+    expr = _.reduce(expr_rest, memo_f, expr);
+    return expr;
+  }
 
 expr =
   e: ( whitespace
@@ -235,7 +255,7 @@ expr =
               } )
        / ( a: ( value binary_op_wout_and expr ) 
               { return new ast.Expr(a[0], a[1], a[2]); } )
-       / ( b: ( e_value ( ISNULL / NOTNULL / ( NOT NULL ) ) )
+       / ( b: ( e_value ( ISNULL / NOTNULL / ( NOT whitespace1 NULL ) ) )
               { return new ast.Expr(b[0], b[1]); } )
        / ( c: ( e_value IS NOT ? e_expr )
               { return new ast.Expr(c[0], "IS NOT", c[c.length-1]) } )
@@ -249,11 +269,24 @@ expr =
   { return e[1]; }
 
 
+param_var = 
+  r: ('$' name)
+  { return new ast.ParamVar(r[1]); }
 
-param = 
-  r: (':' name ':')
+param_expr = 
+  r: (':' expr_and (whitespace '|' whitespace expr_and)?  ':')
   {
-    return new ast.ParamExpr(r[1])
+    var expr = r[1];
+
+    var defaultMatch = r[2];
+    var defaultExpr = null;
+    if (!_.isNull(defaultMatch)) {
+      defaultExpr = defaultMatch[3];
+      if (defaultExpr.descendents("ParamVar").length > 0) {
+        throw Error("Param: default expression cannot include variables");
+      }
+    }
+    return new ast.ParamExpr(expr, defaultExpr);
   }
 
 
@@ -274,8 +307,10 @@ e_value =
            { return new ast.ColExpr(t[2], t[0]); } )
        / ( v: (column_name)
            { return new ast.ColExpr(v, null); })
-       / ( r: param 
+       / ( r: param_expr
            { return r; })
+       / ( pv: param_var
+           { return pv; })
 //       / ( unary_operator e_expr )
        / ( y: ( lparen e_where whitespace rparen )
            { return y[1]; } ) ) )
@@ -285,7 +320,7 @@ e_expr =
   e: ( whitespace
        ( ( a: ( e_value binary_op_wout_and e_expr ) 
               { return new ast.Expr(a[0], a[1], a[2]); } )
-       / ( b: ( e_value ( ISNULL / NOTNULL / ( NOT NULL ) ) )
+       / ( b: ( e_value ( ISNULL / NOTNULL / ( NOT whitespace1 NULL ) ) )
               { return new ast.Expr(b[0], b[1]); } )
        / ( c: ( e_value IS NOT ? e_expr )
               { return new ast.Expr(c[0], "IS NOT", c[c.length-1]) } )
@@ -434,7 +469,7 @@ binary_op_wout_and =
        ('||'
         / '*' / '/' / '%'
         / '+' / '-'
-        / '<<' / '>>' / '&' / '|'
+        / '<<' / '>>' / '&' 
         / '<=' / '>='
         / '<' / '>'
         / '=' / '==' / '!=' / '<>'
@@ -442,6 +477,7 @@ binary_op_wout_and =
         / 'OR') )
   { return x[1] }
 
+// / '|'
 
 binary_operator =
   x: ( whitespace
@@ -555,7 +591,7 @@ MATCH = whitespace1 "MATCH"
 NO = whitespace1 "NO"
 NOT = whitespace1 "NOT"
 NOTNULL = whitespace1 "NOTNULL"
-NULL = whitespace1 "NULL"
+NULL = ("NULL" / "null")
 OF = whitespace1 "OF"
 OFFSET = whitespace1 "OFFSET"
 ON = whitespace1 "ON"

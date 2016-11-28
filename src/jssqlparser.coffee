@@ -4,7 +4,7 @@ _ = require "underscore"
 
 _.extend @, ast
 
-parse = (str, DEBUG=yes) ->
+parse = (str, DEBUG=no) ->
 
   prepareString = (str) ->
     q = str
@@ -20,4 +20,8 @@ parse = (str, DEBUG=yes) ->
   parser.parse prepareString str
 
 _.extend parse, ast
+parse.one = (args...) ->
+  res = parse args...
+  res.queries[0]
+
 module.exports = parse
