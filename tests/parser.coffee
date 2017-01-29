@@ -9,7 +9,8 @@ assert = require "assert"
 suite = vows.describe("Parser Tests")
   .addBatch(
     "Project":
-      topic: () -> parser "SELECT :$a|a: FROM b;"
+      topic: () -> 
+        parser "SELECT :$a|a: FROM b;"
       'swap nay' : (q) ->
         q.descendents("ParamVar")[0].val = new ast.ColExpr("nay")
         assert.equal q.toPrettySQL(), "SELECT nay FROM (b) AS b WHERE 1 = 1;"

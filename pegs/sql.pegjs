@@ -509,9 +509,7 @@ type =
   
 
 table_name = 
-  (
-    n: name 
-  )
+  n: name 
   { return new ast.Table(n, null); }
 
 
