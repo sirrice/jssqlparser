@@ -33,3 +33,8 @@ Getting started
 * run a test in `./tests/`
 
         fab parser
+
+
+# TODOs
+
+evaluate [chevrotrain](http://sap.github.io/chevrotain/playground/)
